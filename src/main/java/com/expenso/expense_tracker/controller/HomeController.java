@@ -13,16 +13,16 @@ public class HomeController {
 
 	@GetMapping("/health")
 	public String healthCheck() {
-		return "API is running healthy!";
+        return "API is running healthy!";
 	}
 
 	@GetMapping("/status")
 	public String status() {
-		return "API is operational!";
+        return "API is operational!";
 	}
 
 	@GetMapping("/version")
 	public String version() {
-		return "Expense Tracker API Version 1.0";
+        return "Expense Tracker API Version 1.0";
 	}
 }
