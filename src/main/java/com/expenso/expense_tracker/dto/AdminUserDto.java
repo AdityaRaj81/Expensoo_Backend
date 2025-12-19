@@ -12,10 +12,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AdminUserDto {
-    private UUID id;
-    private String email;
-    private String name;
-    private String role;
-    private Boolean active;
-    private LocalDateTime createdAt;
+  private UUID id;
+  private String email;
+  private String name;
+  private String role;
+  private Boolean active;
+  private LocalDateTime createdAt;
 }

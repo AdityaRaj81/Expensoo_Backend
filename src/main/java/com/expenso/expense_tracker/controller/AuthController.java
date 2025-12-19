@@ -64,11 +64,10 @@ public class AuthController {
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
         response.put("user", Map.of(
-            "id", user.getId(),
-            "email", user.getEmail(),
-            "name", user.getName(),
-            "role", user.getRole()
-        ));
+                "id", user.getId(),
+                "email", user.getEmail(),
+                "name", user.getName(),
+                "role", user.getRole()));
 
         return ResponseEntity.ok(response);
     }

@@ -11,12 +11,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class AdminStatsDto {
-    private Long totalUsers;
-    private Long activeUsers;
-    private Long totalTransactions;
-    private Double totalIncome;
-    private Double totalExpense;
-    private String backendStatus; // "Operational", "Degraded", etc.
-    private String databaseStatus;
-    private LocalDateTime lastChecked;
+  private Long totalUsers;
+  private Long activeUsers;
+  private Long totalTransactions;
+  private Double totalIncome;
+  private Double totalExpense;
+  private String backendStatus; // "Operational", "Degraded", etc.
+  private String databaseStatus;
+  private LocalDateTime lastChecked;
 }

@@ -1,5 +1,5 @@
 package com.expenso.expense_tracker.security;
- 
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.JwtParser;
@@ -28,8 +28,8 @@ public class JwtService {
         // Ensure the secret key is strong enough (HS256 needs at least 256-bit key)
         this.key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
         this.parser = Jwts.parser()
-                          .verifyWith(key)
-                          .build();
+                .verifyWith(key)
+                .build();
     }
 
     // Generate token with role claim
@@ -52,7 +52,7 @@ public class JwtService {
         if (token == null || !token.startsWith("Bearer ") || token.length() <= 7) {
             throw new RuntimeException("Invalid Authorization header");
         }
-        token = token.substring(7);  // 🛡️ safe now
+        token = token.substring(7); // 🛡️ safe now
 
         Claims claims = parser.parseSignedClaims(token).getPayload();
         return UUID.fromString(claims.getSubject());

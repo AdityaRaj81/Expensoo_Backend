@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class AdminReportDto {
-    private String reportType; // "user-export", "transaction-export", "summary"
-    private String title;
-    private String description;
-    private Boolean available;
+  private String reportType; // "user-export", "transaction-export", "summary"
+  private String title;
+  private String description;
+  private Boolean available;
 }

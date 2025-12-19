@@ -21,167 +21,165 @@ import java.util.stream.Collectors;
 @Service
 public class AdminService {
 
-    @Autowired
-    private UserRepository userRepository;
+  @Autowired
+  private UserRepository userRepository;
 
-    @Autowired
-    private TransactionRepository transactionRepository;
+  @Autowired
+  private TransactionRepository transactionRepository;
 
-    /**
-     * Get dashboard statistics
-     */
-    public AdminStatsDto getDashboardStats() {
-        long totalUsers = userRepository.count();
-        long activeUsers = userRepository.findAll().stream()
-                .filter(u -> u.getActive() && u.getCreatedAt().isAfter(LocalDateTime.now().minus(30, ChronoUnit.DAYS)))
-                .count();
-        long totalTransactions = transactionRepository.count();
+  /**
+   * Get dashboard statistics
+   */
+  public AdminStatsDto getDashboardStats() {
+    long totalUsers = userRepository.count();
+    long activeUsers = userRepository.findAll().stream()
+        .filter(u -> u.getActive() && u.getCreatedAt().isAfter(LocalDateTime.now().minus(30, ChronoUnit.DAYS)))
+        .count();
+    long totalTransactions = transactionRepository.count();
 
-        Double totalIncome = transactionRepository.findAll().stream()
-                .filter(t -> "INCOME".equals(t.getType()))
-                .mapToDouble(Transaction::getAmount)
-                .sum();
+    Double totalIncome = transactionRepository.findAll().stream()
+        .filter(t -> "INCOME".equals(t.getType()))
+        .mapToDouble(Transaction::getAmount)
+        .sum();
 
-        Double totalExpense = transactionRepository.findAll().stream()
-                .filter(t -> "EXPENSE".equals(t.getType()))
-                .mapToDouble(Transaction::getAmount)
-                .sum();
+    Double totalExpense = transactionRepository.findAll().stream()
+        .filter(t -> "EXPENSE".equals(t.getType()))
+        .mapToDouble(Transaction::getAmount)
+        .sum();
 
-        return AdminStatsDto.builder()
-                .totalUsers(totalUsers)
-                .activeUsers(activeUsers)
-                .totalTransactions(totalTransactions)
-                .totalIncome(totalIncome)
-                .totalExpense(totalExpense)
-                .backendStatus("Operational")
-                .databaseStatus("Operational")
-                .lastChecked(LocalDateTime.now())
-                .build();
+    return AdminStatsDto.builder()
+        .totalUsers(totalUsers)
+        .activeUsers(activeUsers)
+        .totalTransactions(totalTransactions)
+        .totalIncome(totalIncome)
+        .totalExpense(totalExpense)
+        .backendStatus("Operational")
+        .databaseStatus("Operational")
+        .lastChecked(LocalDateTime.now())
+        .build();
+  }
+
+  /**
+   * Get paginated list of all users with optional search
+   */
+  public Page<AdminUserDto> getAllUsers(String search, Pageable pageable) {
+    List<User> users;
+
+    if (search != null && !search.isEmpty()) {
+      String searchLower = search.toLowerCase();
+      users = userRepository.findAll().stream()
+          .filter(u -> u.getEmail().toLowerCase().contains(searchLower) ||
+              (u.getName() != null && u.getName().toLowerCase().contains(searchLower)))
+          .collect(Collectors.toList());
+    } else {
+      users = userRepository.findAll();
     }
 
-    /**
-     * Get paginated list of all users with optional search
-     */
-    public Page<AdminUserDto> getAllUsers(String search, Pageable pageable) {
-        List<User> users;
+    List<AdminUserDto> dtos = users.stream()
+        .map(u -> AdminUserDto.builder()
+            .id(u.getId())
+            .email(u.getEmail())
+            .name(u.getName())
+            .role(u.getRole())
+            .active(u.getActive())
+            .createdAt(u.getCreatedAt())
+            .build())
+        .collect(Collectors.toList());
 
-        if (search != null && !search.isEmpty()) {
-            String searchLower = search.toLowerCase();
-            users = userRepository.findAll().stream()
-                    .filter(u -> u.getEmail().toLowerCase().contains(searchLower) ||
-                            (u.getName() != null && u.getName().toLowerCase().contains(searchLower)))
-                    .collect(Collectors.toList());
-        } else {
-            users = userRepository.findAll();
-        }
+    int start = (int) pageable.getOffset();
+    int end = Math.min(start + pageable.getPageSize(), dtos.size());
 
-        List<AdminUserDto> dtos = users.stream()
-                .map(u -> AdminUserDto.builder()
-                        .id(u.getId())
-                        .email(u.getEmail())
-                        .name(u.getName())
-                        .role(u.getRole())
-                        .active(u.getActive())
-                        .createdAt(u.getCreatedAt())
-                        .build())
-                .collect(Collectors.toList());
+    return new PageImpl<>(
+        dtos.subList(start, end),
+        pageable,
+        dtos.size());
+  }
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), dtos.size());
+  /**
+   * Block/unblock a user (soft delete)
+   */
+  public AdminUserDto blockUnblockUser(String userId, Boolean active) {
+    java.util.UUID uuid = java.util.UUID.fromString(userId);
+    User user = userRepository.findById(uuid)
+        .orElseThrow(() -> new RuntimeException("User not found"));
 
-        return new PageImpl<>(
-                dtos.subList(start, end),
-                pageable,
-                dtos.size()
-        );
+    // Prevent blocking the admin
+    if ("ADMIN".equals(user.getRole())) {
+      throw new RuntimeException("Cannot modify admin account");
     }
 
-    /**
-     * Block/unblock a user (soft delete)
-     */
-    public AdminUserDto blockUnblockUser(String userId, Boolean active) {
-        java.util.UUID uuid = java.util.UUID.fromString(userId);
-        User user = userRepository.findById(uuid)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    user.setActive(active);
+    userRepository.save(user);
 
-        // Prevent blocking the admin
-        if ("ADMIN".equals(user.getRole())) {
-            throw new RuntimeException("Cannot modify admin account");
-        }
+    return AdminUserDto.builder()
+        .id(user.getId())
+        .email(user.getEmail())
+        .name(user.getName())
+        .role(user.getRole())
+        .active(user.getActive())
+        .createdAt(user.getCreatedAt())
+        .build();
+  }
 
-        user.setActive(active);
-        userRepository.save(user);
+  /**
+   * Get paginated list of all transactions with optional filters
+   */
+  public Page<AdminTransactionDto> getAllTransactions(String userEmail, String type, Pageable pageable) {
+    List<Transaction> transactions;
 
-        return AdminUserDto.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .name(user.getName())
-                .role(user.getRole())
-                .active(user.getActive())
-                .createdAt(user.getCreatedAt())
-                .build();
+    if ((userEmail != null && !userEmail.isEmpty()) || (type != null && !type.isEmpty())) {
+      transactions = transactionRepository.findAll().stream()
+          .filter(t -> {
+            boolean matches = true;
+            if (userEmail != null && !userEmail.isEmpty()) {
+              User user = userRepository.findById(t.getUserId()).orElse(null);
+              if (user == null || !user.getEmail().toLowerCase().contains(userEmail.toLowerCase())) {
+                matches = false;
+              }
+            }
+            if (type != null && !type.isEmpty() && !t.getType().equals(type)) {
+              matches = false;
+            }
+            return matches;
+          })
+          .collect(Collectors.toList());
+    } else {
+      transactions = transactionRepository.findAll();
     }
 
-    /**
-     * Get paginated list of all transactions with optional filters
-     */
-    public Page<AdminTransactionDto> getAllTransactions(String userEmail, String type, Pageable pageable) {
-        List<Transaction> transactions;
+    List<AdminTransactionDto> dtos = transactions.stream()
+        .map(t -> {
+          User user = userRepository.findById(t.getUserId()).orElse(null);
+          return AdminTransactionDto.builder()
+              .id(t.getId())
+              .userId(t.getUserId())
+              .userEmail(user != null ? user.getEmail() : "Unknown")
+              .type(t.getType())
+              .amount(t.getAmount())
+              .category(t.getCategory())
+              .date(t.getDate())
+              .notes(t.getNotes())
+              .build();
+        })
+        .collect(Collectors.toList());
 
-        if ((userEmail != null && !userEmail.isEmpty()) || (type != null && !type.isEmpty())) {
-            transactions = transactionRepository.findAll().stream()
-                    .filter(t -> {
-                        boolean matches = true;
-                        if (userEmail != null && !userEmail.isEmpty()) {
-                            User user = userRepository.findById(t.getUserId()).orElse(null);
-                            if (user == null || !user.getEmail().toLowerCase().contains(userEmail.toLowerCase())) {
-                                matches = false;
-                            }
-                        }
-                        if (type != null && !type.isEmpty() && !t.getType().equals(type)) {
-                            matches = false;
-                        }
-                        return matches;
-                    })
-                    .collect(Collectors.toList());
-        } else {
-            transactions = transactionRepository.findAll();
-        }
+    int start = (int) pageable.getOffset();
+    int end = Math.min(start + pageable.getPageSize(), dtos.size());
 
-        List<AdminTransactionDto> dtos = transactions.stream()
-                .map(t -> {
-                    User user = userRepository.findById(t.getUserId()).orElse(null);
-                    return AdminTransactionDto.builder()
-                            .id(t.getId())
-                            .userId(t.getUserId())
-                            .userEmail(user != null ? user.getEmail() : "Unknown")
-                            .type(t.getType())
-                            .amount(t.getAmount())
-                            .category(t.getCategory())
-                            .date(t.getDate())
-                            .notes(t.getNotes())
-                            .build();
-                })
-                .collect(Collectors.toList());
+    return new PageImpl<>(
+        dtos.subList(start, end),
+        pageable,
+        dtos.size());
+  }
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), dtos.size());
-
-        return new PageImpl<>(
-                dtos.subList(start, end),
-                pageable,
-                dtos.size()
-        );
-    }
-
-    /**
-     * Check system health (stub)
-     */
-    public AdminStatsDto getSystemHealth() {
-        return AdminStatsDto.builder()
-                .backendStatus("Operational")
-                .databaseStatus("Operational")
-                .lastChecked(LocalDateTime.now())
-                .build();
-    }
+  /**
+   * Check system health (stub)
+   */
+  public AdminStatsDto getSystemHealth() {
+    return AdminStatsDto.builder()
+        .backendStatus("Operational")
+        .databaseStatus("Operational")
+        .lastChecked(LocalDateTime.now())
+        .build();
+  }
 }

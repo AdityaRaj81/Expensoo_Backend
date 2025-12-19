@@ -12,12 +12,12 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class AdminTransactionDto {
-    private Long id;
-    private UUID userId;
-    private String userEmail;
-    private String type;
-    private Double amount;
-    private String category;
-    private LocalDate date;
-    private String notes;
+  private Long id;
+  private UUID userId;
+  private String userEmail;
+  private String type;
+  private Double amount;
+  private String category;
+  private LocalDate date;
+  private String notes;
 }
