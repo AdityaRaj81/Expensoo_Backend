@@ -31,11 +31,17 @@ public class AdminService {
    * Get dashboard statistics
    */
   public AdminStatsDto getDashboardStats() {
+    System.out.println("DEBUG AdminService: Fetching dashboard stats");
     long totalUsers = userRepository.count();
+    System.out.println("DEBUG AdminService: Total users: " + totalUsers);
+
     long activeUsers = userRepository.findAll().stream()
         .filter(u -> u.getActive() && u.getCreatedAt().isAfter(LocalDateTime.now().minus(30, ChronoUnit.DAYS)))
         .count();
+    System.out.println("DEBUG AdminService: Active users (last 30 days): " + activeUsers);
+
     long totalTransactions = transactionRepository.count();
+    System.out.println("DEBUG AdminService: Total transactions: " + totalTransactions);
 
     Double totalIncome = transactionRepository.findAll().stream()
         .filter(t -> "INCOME".equals(t.getType()))
@@ -46,6 +52,8 @@ public class AdminService {
         .filter(t -> "EXPENSE".equals(t.getType()))
         .mapToDouble(Transaction::getAmount)
         .sum();
+
+    System.out.println("DEBUG AdminService: Total income: " + totalIncome + ", Total expense: " + totalExpense);
 
     return AdminStatsDto.builder()
         .totalUsers(totalUsers)
@@ -63,6 +71,7 @@ public class AdminService {
    * Get paginated list of all users with optional search
    */
   public Page<AdminUserDto> getAllUsers(String search, Pageable pageable) {
+    System.out.println("DEBUG AdminService: Fetching all users with search: " + search);
     List<User> users;
 
     if (search != null && !search.isEmpty()) {
@@ -71,8 +80,10 @@ public class AdminService {
           .filter(u -> u.getEmail().toLowerCase().contains(searchLower) ||
               (u.getName() != null && u.getName().toLowerCase().contains(searchLower)))
           .collect(Collectors.toList());
+      System.out.println("DEBUG AdminService: Found " + users.size() + " matching users");
     } else {
       users = userRepository.findAll();
+      System.out.println("DEBUG AdminService: Found " + users.size() + " total users");
     }
 
     List<AdminUserDto> dtos = users.stream()
@@ -125,6 +136,8 @@ public class AdminService {
    * Get paginated list of all transactions with optional filters
    */
   public Page<AdminTransactionDto> getAllTransactions(String userEmail, String type, Pageable pageable) {
+    System.out.println(
+        "DEBUG AdminService: Fetching all transactions with filters - userEmail: " + userEmail + ", type: " + type);
     List<Transaction> transactions;
 
     if ((userEmail != null && !userEmail.isEmpty()) || (type != null && !type.isEmpty())) {
@@ -143,8 +156,10 @@ public class AdminService {
             return matches;
           })
           .collect(Collectors.toList());
+      System.out.println("DEBUG AdminService: Found " + transactions.size() + " filtered transactions");
     } else {
       transactions = transactionRepository.findAll();
+      System.out.println("DEBUG AdminService: Found " + transactions.size() + " total transactions");
     }
 
     List<AdminTransactionDto> dtos = transactions.stream()

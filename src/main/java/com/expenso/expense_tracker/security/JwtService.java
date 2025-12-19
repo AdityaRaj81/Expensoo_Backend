@@ -54,8 +54,16 @@ public class JwtService {
         }
         token = token.substring(7); // 🛡️ safe now
 
-        Claims claims = parser.parseSignedClaims(token).getPayload();
-        return UUID.fromString(claims.getSubject());
+        try {
+            Claims claims = parser.parseSignedClaims(token).getPayload();
+            String subject = claims.getSubject();
+            System.out.println("DEBUG JWT: Subject extracted: " + subject);
+            return UUID.fromString(subject);
+        } catch (Exception e) {
+            System.err.println("DEBUG JWT: Error parsing token: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to extract userId from token: " + e.getMessage());
+        }
     }
 
     // Extract role from token
@@ -65,9 +73,16 @@ public class JwtService {
         }
         token = token.substring(7);
 
-        Claims claims = parser.parseSignedClaims(token).getPayload();
-        String role = claims.get("role", String.class);
-        return role != null ? role : "USER";
+        try {
+            Claims claims = parser.parseSignedClaims(token).getPayload();
+            String role = claims.get("role", String.class);
+            System.out.println("DEBUG JWT: Role extracted: " + role);
+            return role != null ? role : "USER";
+        } catch (Exception e) {
+            System.err.println("DEBUG JWT: Error extracting role: " + e.getMessage());
+            e.printStackTrace();
+            return "USER";
+        }
     }
 
 }
