@@ -27,7 +27,7 @@ public class UserService {
     public String loginUser(LoginDTO loginDTO) {
         Optional<User> userOpt = userRepository.findByEmailIgnoreCase(loginDTO.getEmail());
 
-        if (!userOpt.isPresent()) {
+        if (userOpt.isEmpty()) {
             return "user_not_found";
         }
 
