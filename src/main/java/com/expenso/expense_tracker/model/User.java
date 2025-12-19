@@ -29,10 +29,13 @@ public class User {
     private String password;
 
     @Column(nullable = false)
+    @Builder.Default
     private String role = "USER"; // USER, ADMIN, MANAGER
 
     @Column(nullable = false)
+    @Builder.Default
     private Boolean active = true; // soft delete flag
 
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }

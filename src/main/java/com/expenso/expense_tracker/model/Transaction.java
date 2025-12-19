@@ -31,5 +31,6 @@ public class Transaction {
     private String notes;
 
     @CreationTimestamp
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }
