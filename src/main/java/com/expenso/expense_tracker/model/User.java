@@ -28,9 +28,11 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    private String role = "USER";
+    @Column(nullable = false)
+    private String role = "USER"; // USER, ADMIN, MANAGER
 
-    private String themePreference = "light"; // Default
+    @Column(nullable = false)
+    private Boolean active = true; // soft delete flag
 
     private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -48,17 +48,27 @@ public class AuthController {
 
         User user = userOpt.get();
 
+        // Check if user is active
+        if (!user.getActive()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "User account is blocked"));
+        }
+
         if (!user.getPassword().equals(loginRequest.getPassword())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid password"));
         }
 
-        // ✅ Generate real JWT token
-        String token = jwtService.generateToken(user.getId());
+        // ✅ Generate JWT token with role claim
+        String token = jwtService.generateToken(user.getId(), user.getRole());
 
-        // ✅ Return token and user
+        // ✅ Return token and user with role
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
-        response.put("user", user);
+        response.put("user", Map.of(
+            "id", user.getId(),
+            "email", user.getEmail(),
+            "name", user.getName(),
+            "role", user.getRole()
+        ));
 
         return ResponseEntity.ok(response);
     }
