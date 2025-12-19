@@ -63,11 +63,13 @@ public class AuthController {
         // ✅ Return token and user with role
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
-        response.put("user", Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "name", user.getName(),
-                "role", user.getRole()));
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", user.getId());
+        userMap.put("email", user.getEmail());
+        userMap.put("name", user.getName() != null ? user.getName() : "");
+        userMap.put("role", user.getRole());
+        response.put("user", userMap);
 
         return ResponseEntity.ok(response);
     }
