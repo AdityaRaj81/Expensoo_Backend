@@ -1,2 +1,0 @@
--- This migration is no longer needed as V2 handles it properly
--- Keeping this file to maintain migration version sequence
