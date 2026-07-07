@@ -32,7 +32,7 @@ public class AnalyticsController {
       @RequestHeader("Authorization") String token,
       @RequestParam(defaultValue = "12") int months) {
 
-    UUID userId = jwtService.extractUserId(token.replace("Bearer ", ""));
+    UUID userId = jwtService.extractUserId(token);
     AnalyticsDTO analytics = analyticsService.getAnalytics(userId, months);
     return ResponseEntity.ok(analytics);
   }
@@ -43,7 +43,7 @@ public class AnalyticsController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-    UUID userId = jwtService.extractUserId(token.replace("Bearer ", ""));
+    UUID userId = jwtService.extractUserId(token);
 
     if (startDate == null) {
       startDate = LocalDate.now().minusYears(1);
@@ -84,7 +84,7 @@ public class AnalyticsController {
 
     // Return CSV format that Excel can open (same as CSV but with different
     // content-type)
-    UUID userId = jwtService.extractUserId(token.replace("Bearer ", ""));
+    UUID userId = jwtService.extractUserId(token);
 
     if (startDate == null) {
       startDate = LocalDate.now().minusYears(1);
