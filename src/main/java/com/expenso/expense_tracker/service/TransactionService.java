@@ -148,6 +148,39 @@ public class TransactionService {
                 return response;
         }
 
+        public Transaction getTransaction(Long id, UUID userId) {
+                return transactionRepository.findByIdAndUserId(id, userId)
+                                .orElseThrow(() -> new RuntimeException("Transaction not found or unauthorized"));
+        }
+
+        public List<Transaction> getTransactionsForExport(
+                        UUID userId,
+                        String type,
+                        String category,
+                        LocalDate dateFrom,
+                        LocalDate dateTo) {
+                Specification<Transaction> spec = Specification
+                                .where((root, query, cb) -> cb.equal(root.get("userId"), userId));
+
+                if (type != null && !type.isBlank()) {
+                        spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), type));
+                }
+
+                if (category != null && !category.isBlank()) {
+                        spec = spec.and((root, query, cb) -> cb.equal(root.get("category"), category));
+                }
+
+                if (dateFrom != null) {
+                        spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("date"), dateFrom));
+                }
+
+                if (dateTo != null) {
+                        spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("date"), dateTo));
+                }
+
+                return transactionRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "date"));
+        }
+
         public Transaction addTransaction(TransactionRequest request, UUID userId) {
                 System.out.println("DEBUG TransactionService: Adding transaction for userId: " + userId);
                 System.out.println("DEBUG TransactionService: Request - type: " + request.getType() +

@@ -9,9 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -23,6 +27,13 @@ public class TransactionController {
 
     @Autowired
     private JwtService jwtService;
+
+    private UUID getUserIdFromAuthHeader(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
+            throw new RuntimeException("Missing or invalid Authorization header");
+        }
+        return jwtService.extractUserId(authHeader);
+    }
 
     @GetMapping
     public ResponseEntity<?> getTransactions(
@@ -45,6 +56,18 @@ public class TransactionController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("Invalid or expired token. Please login again. Error: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getTransaction(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            UUID userId = getUserIdFromAuthHeader(authHeader);
+            return ResponseEntity.ok(transactionService.getTransaction(id, userId));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Transaction not found");
         }
     }
 
@@ -75,6 +98,49 @@ public class TransactionController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to fetch filtered transactions. Error: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<String> exportTransactions(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
+        try {
+            UUID userId = getUserIdFromAuthHeader(authHeader);
+            List<Transaction> transactions = transactionService.getTransactionsForExport(
+                    userId, type, category, dateFrom, dateTo);
+
+            StringBuilder csv = new StringBuilder();
+            csv.append("Date,Type,Category,Amount,Notes\n");
+
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            for (Transaction transaction : transactions) {
+                csv.append(transaction.getDate().format(formatter)).append(",")
+                        .append(escapeCsv(transaction.getType())).append(",")
+                        .append(escapeCsv(transaction.getCategory())).append(",")
+                        .append(transaction.getAmount()).append(",")
+                        .append(escapeCsv(transaction.getNotes()))
+                        .append("\n");
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType("text/csv"));
+            headers.setContentDispositionFormData("attachment", "transactions_"
+                    + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".csv");
+
+            return new ResponseEntity<>(csv.toString(), headers, HttpStatus.OK);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Failed to export transactions");
+        }
+    }
+
+    private String escapeCsv(String value) {
+        if (value == null) {
+            return "";
+        }
+        return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
     @PostMapping("/add")
