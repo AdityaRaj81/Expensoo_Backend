@@ -25,17 +25,30 @@ public class AuthController {
     private JwtService jwtService; // ✅ moved above usage
 
     @PostMapping("/signup")
-    public String signup(@RequestBody User user) {
+    public ResponseEntity<?> signup(@RequestBody User user) {
 
         // Always save emails in lowercase
         String normalizedEmail = user.getEmail().toLowerCase();
 
         if (userRepository.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
-            return "Email already registered!";
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Email already registered!"));
         }
         user.setEmail(normalizedEmail);
-        userRepository.save(user);
-        return "User registered successfully!";
+        User savedUser = userRepository.save(user);
+
+        String token = jwtService.generateToken(savedUser.getId(), savedUser.getRole());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("token", token);
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", savedUser.getId());
+        userMap.put("email", savedUser.getEmail());
+        userMap.put("name", savedUser.getName() != null ? savedUser.getName() : "");
+        userMap.put("role", savedUser.getRole());
+        response.put("user", userMap);
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
