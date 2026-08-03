@@ -1,120 +1,271 @@
 package com.expenso.expense_tracker.service;
 
-import com.expenso.expense_tracker.dto.*;
-import com.expenso.expense_tracker.model.Transaction;
-import com.expenso.expense_tracker.model.User;
-import com.expenso.expense_tracker.repository.UserRepository;
-import com.expenso.expense_tracker.repository.TransactionRepository;
-
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.time.LocalDate;
-import java.time.format.TextStyle;
-import java.util.*;
+import java.math.BigDecimal;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.expenso.expense_tracker.dto.dashboard.CategoryDataDTO;
+import com.expenso.expense_tracker.dto.dashboard.DashboardResponse;
+import com.expenso.expense_tracker.dto.dashboard.MonthlyDataDTO;
+import com.expenso.expense_tracker.dto.transaction.TransactionDTO;
+import com.expenso.expense_tracker.enums.TransactionType;
+import com.expenso.expense_tracker.exception.ResourceNotFoundException;
+import com.expenso.expense_tracker.mapper.TransactionMapper;
+import com.expenso.expense_tracker.model.Transaction;
+import com.expenso.expense_tracker.repository.TransactionRepository;
+import com.expenso.expense_tracker.repository.UserRepository;
+
+import lombok.RequiredArgsConstructor;
+
+/**
+ * ============================================================
+ * Dashboard Service
+ * ============================================================
+ *
+ * Handles
+ *
+ * • Dashboard Summary
+ * • Monthly Income
+ * • Monthly Expense
+ * • Monthly Balance
+ * • Recent Transactions
+ * • Monthly Overview
+ * • Expense Breakdown
+ *
+ * ============================================================
+ */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class DashboardService {
-
-        private final TransactionRepository transactionRepository;
-        private final UserRepository userRepository;
-
-        public DashboardResponse getDashboardData(UUID userId) {
-                System.out.println("DEBUG DashboardService: Fetching dashboard data for userId: " + userId);
-
-                // ✅ Step 1: Fetch user from DB using userId
-                User user = userRepository.findById(userId)
-                                .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
-
-                System.out.println("DEBUG DashboardService: User found: " + user.getEmail());
-
-                List<Transaction> transactions = transactionRepository.findByUserId(userId);
-                System.out.println("DEBUG DashboardService: Found " + transactions.size() + " transactions");
-
-                double totalIncome = transactions.stream()
-                                .filter(t -> t.getType().equalsIgnoreCase("income"))
-                                .mapToDouble(Transaction::getAmount)
-                                .sum();
-
-                double totalExpenses = transactions.stream()
-                                .filter(t -> t.getType().equalsIgnoreCase("expense"))
-                                .mapToDouble(Transaction::getAmount)
-                                .sum();
-
-                double balance = totalIncome - totalExpenses;
-
-                System.out.println("DEBUG DashboardService: totalIncome=" + totalIncome + ", totalExpenses="
-                                + totalExpenses + ", balance=" + balance);
-
-                List<TransactionDTO> recentTransactions = transactions.stream()
-                                .sorted((t1, t2) -> t2.getDate().compareTo(t1.getDate()))
+    private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
+    private final TransactionMapper transactionMapper;
+    /**
+     * ============================================================
+     * Get Dashboard
+     * ============================================================
+     */
+    public DashboardResponse getDashboard(UUID userId) {
+        return getDashboard(
+                userId,
+                YearMonth.now()
+        );
+    }
+    /**
+     * ============================================================
+     * Get Dashboard (Selected Month)
+     * ============================================================
+     */
+    public DashboardResponse getDashboard(
+            UUID userId,
+            YearMonth selectedMonth
+    ) {
+        userRepository
+                .findByIdAndActiveTrue(userId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "User not found."
+                        )
+                );
+        List<Transaction> allTransactions =
+                transactionRepository
+                        .findByUserIdOrderByDateDesc(userId);
+        List<Transaction> currentMonthTransactions =
+                getCurrentMonthTransactions(
+                        allTransactions,
+                        selectedMonth
+                );
+        BigDecimal monthlyIncome =
+                calculateMonthlyIncome(
+                        currentMonthTransactions
+                );
+        BigDecimal monthlyExpense =
+                calculateMonthlyExpense(
+                        currentMonthTransactions
+                );
+        BigDecimal monthlyBalance =
+                monthlyIncome.subtract(
+                        monthlyExpense
+                );
+        List<TransactionDTO> recentTransactions =
+                transactionMapper.toTransactionDTOList(
+                        allTransactions.stream()
                                 .limit(5)
-                                .map(t -> new TransactionDTO(
-                                                t.getId().toString(),
-                                                t.getAmount(),
-                                                t.getCategory(),
-                                                t.getType(),
-                                                t.getDate()))
-                                .collect(Collectors.toList());
-
-                // ✅ Generate chart data
-                List<MonthlyDataDTO> monthlyData = generateMonthlyData(transactions);
-                List<CategoryDataDTO> categoryData = generateCategoryData(transactions);
-
-                return new DashboardResponse(
-                                totalIncome,
-                                totalExpenses,
-                                balance,
-                                recentTransactions,
-                                monthlyData,
-                                categoryData);
-        }
-
-        // ✅ Line Chart: Income vs Expenses per month (last 6 months)
-        private List<MonthlyDataDTO> generateMonthlyData(List<Transaction> transactions) {
-                LocalDate now = LocalDate.now();
-                List<MonthlyDataDTO> result = new ArrayList<>();
-
-                for (int i = 5; i >= 0; i--) {
-                        LocalDate monthDate = now.minusMonths(i);
-                        String monthName = monthDate.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
-
-                        double income = transactions.stream()
-                                        .filter(t -> t.getType().equalsIgnoreCase("income") &&
-                                                        t.getDate().getMonthValue() == monthDate.getMonthValue() &&
-                                                        t.getDate().getYear() == monthDate.getYear())
-                                        .mapToDouble(Transaction::getAmount)
-                                        .sum();
-
-                        double expense = transactions.stream()
-                                        .filter(t -> t.getType().equalsIgnoreCase("expense") &&
-                                                        t.getDate().getMonthValue() == monthDate.getMonthValue() &&
-                                                        t.getDate().getYear() == monthDate.getYear())
-                                        .mapToDouble(Transaction::getAmount)
-                                        .sum();
-
-                        result.add(new MonthlyDataDTO(monthName, income, expense, income - expense));
+                                .collect(Collectors.toList())
+                );
+        return DashboardResponse.builder()
+                .monthlyIncome(monthlyIncome)
+                .monthlyExpense(monthlyExpense)
+                .monthlyBalance(monthlyBalance)
+                .recentTransactions(recentTransactions)
+                .monthlyOverview(
+                        generateMonthlyOverview(
+                                allTransactions
+                        )
+                )
+                .expenseBreakdown(
+                        generateExpenseBreakdown(
+                                currentMonthTransactions
+                        )
+                )
+                .build();
+    }
+    /**
+     * ============================================================
+     * Current Month Transactions
+     * ============================================================
+     */
+    private List<Transaction> getCurrentMonthTransactions(
+            List<Transaction> transactions,
+            YearMonth month
+    ) {
+        return transactions.stream()
+                .filter(transaction ->
+                        YearMonth.from(
+                                transaction.getDate()
+                        ).equals(month)
+                )
+                .collect(Collectors.toList());
+    }
+    /**
+     * ============================================================
+     * Monthly Income
+     * ============================================================
+     */
+    private BigDecimal calculateMonthlyIncome(
+            List<Transaction> transactions
+    ) {
+        return transactions.stream()
+                .filter(transaction ->
+                        transaction.getType()
+                                == TransactionType.INCOME
+                )
+                .map(Transaction::getAmount)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add
+                );
+    }
+    /**
+     * ============================================================
+     * Monthly Expense
+     * ============================================================
+     */
+    private BigDecimal calculateMonthlyExpense(
+            List<Transaction> transactions
+    ) {
+        return transactions.stream()
+                .filter(transaction ->
+                        transaction.getType()
+                                == TransactionType.EXPENSE
+                )
+                .map(Transaction::getAmount)
+                .reduce(
+                        BigDecimal.ZERO,
+                        BigDecimal::add
+                );
+    }
+    /**
+     * ============================================================
+     * Monthly Overview
+     * ============================================================
+     *
+     * Generates the last 6 months' Income, Expense and Balance.
+     */
+    private List<MonthlyDataDTO> generateMonthlyOverview(
+            List<Transaction> transactions
+    ) {
+        List<MonthlyDataDTO> monthlyOverview = new java.util.ArrayList<>();
+        YearMonth currentMonth = YearMonth.now();
+        for (int i = 5; i >= 0; i--) {
+            YearMonth month = currentMonth.minusMonths(i);
+            BigDecimal income = BigDecimal.ZERO;
+            BigDecimal expense = BigDecimal.ZERO;
+            for (Transaction transaction : transactions) {
+                if (!YearMonth.from(transaction.getDate()).equals(month)) {
+                    continue;
                 }
-
-                return result;
+                if (transaction.getType() == TransactionType.INCOME) {
+                    income = income.add(
+                            transaction.getAmount()
+                    );
+                } else {
+                    expense = expense.add(
+                            transaction.getAmount()
+                    );
+                }
+            }
+            monthlyOverview.add(
+                    MonthlyDataDTO.builder()
+                            .month(
+                                    month.getMonth().name()
+                            )
+                            .income(income)
+                            .expense(expense)
+                            .balance(
+                                    income.subtract(expense)
+                            )
+                            .build()
+            );
         }
-
-        // ✅ Pie Chart: Expense breakdown by category (this month)
-        private List<CategoryDataDTO> generateCategoryData(List<Transaction> transactions) {
-                LocalDate now = LocalDate.now();
-                int thisMonth = now.getMonthValue();
-                int thisYear = now.getYear();
-
-                return transactions.stream()
-                                .filter(t -> t.getType().equalsIgnoreCase("expense") &&
-                                                t.getDate().getMonthValue() == thisMonth &&
-                                                t.getDate().getYear() == thisYear)
-                                .collect(Collectors.groupingBy(Transaction::getCategory,
-                                                Collectors.summingDouble(Transaction::getAmount)))
-                                .entrySet().stream()
-                                .map(entry -> new CategoryDataDTO(entry.getKey(), entry.getValue()))
-                                .collect(Collectors.toList());
-        }
+        return monthlyOverview;
+    }
+    /**
+     * ============================================================
+     * Expense Breakdown
+     * ============================================================
+     *
+     * Groups expenses by category for the selected month.
+     */
+    private List<CategoryDataDTO> generateExpenseBreakdown(
+            List<Transaction> transactions
+    ) {
+        return transactions.stream()
+                .filter(transaction ->
+                        transaction.getType()
+                                == TransactionType.EXPENSE
+                )
+                .collect(
+                        Collectors.groupingBy(
+                                Transaction::getCategory,
+                                Collectors.reducing(
+                                        BigDecimal.ZERO,
+                                        Transaction::getAmount,
+                                        BigDecimal::add
+                                )
+                        )
+                )
+                .entrySet()
+                .stream()
+                .map(entry ->
+                        CategoryDataDTO.builder()
+                                .category(
+                                        entry.getKey()
+                                )
+                                .amount(
+                                        entry.getValue()
+                                )
+                                .build()
+                )
+                .sorted((a, b) ->
+                        b.getAmount().compareTo(
+                                a.getAmount()
+                        )
+                )
+                .toList();
+    }
+    /**
+     * ============================================================
+     * Current Month
+     * ============================================================
+     */
+    private YearMonth getCurrentMonth() {
+        return YearMonth.now();
+    }
 }

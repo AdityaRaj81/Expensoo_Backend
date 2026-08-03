@@ -1,88 +1,221 @@
 package com.expenso.expense_tracker.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.JwtParser;
-import io.jsonwebtoken.JwtBuilder;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
-import jakarta.annotation.PostConstruct;
-import org.springframework.stereotype.Service;
-
-import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.UUID;
 
+import javax.crypto.SecretKey;
+
+import jakarta.annotation.PostConstruct;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.expenso.expense_tracker.enums.UserRole;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+
+/**
+ * JWT Service
+ *
+ * Responsible for:
+ * - Generating JWT Tokens
+ * - Validating JWT Tokens
+ * - Extracting JWT Claims
+ * - Extracting User Information
+ */
 @Service
 public class JwtService {
 
-    private static final String SECRET = "expenso-secret-key-which-should-be-long-enough";
-    private static final long EXPIRATION_TIME = 86400000L; // 1 day
+    @Value("${jwt.secret}")
+    private String jwtSecret;
 
-    private SecretKey key;
-    private JwtParser parser;
+    @Value("${jwt.expiration}")
+    private long jwtExpiration;
 
+    private SecretKey secretKey;
+
+    /**
+     * Initialize Secret Key
+     */
     @PostConstruct
-    public void init() {
-        // Ensure the secret key is strong enough (HS256 needs at least 256-bit key)
-        this.key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
-        this.parser = Jwts.parser()
-                .verifyWith(key)
-                .build();
+    public void initialize() {
+
+        this.secretKey = Keys.hmacShaKeyFor(
+                jwtSecret.getBytes(StandardCharsets.UTF_8)
+        );
+
     }
 
-    // Generate token with role claim
-    public String generateToken(UUID userId, String role) {
+    /**
+     * Generate JWT Token
+     */
+    public String generateToken(
+            UUID userId,
+            String email,
+            UserRole role
+    ) {
+
+        Date issuedAt = new Date();
+
+        Date expiration = new Date(
+                issuedAt.getTime() + jwtExpiration
+        );
+
         return Jwts.builder()
-                .subject(userId.toString())
-                .claim("role", role)
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(key, SignatureAlgorithm.HS256)
+
+                .subject(email)
+
+                .claim(
+                        "userId",
+                        userId.toString()
+                )
+
+                .claim(
+                        "role",
+                        role.name()
+                )
+
+                .issuedAt(issuedAt)
+
+                .expiration(expiration)
+
+                .signWith(secretKey)
+
                 .compact();
+
     }
 
-    // Legacy method for backward compatibility
-    public String generateToken(UUID userId) {
-        return generateToken(userId, "USER");
+    /**
+     * Remove Bearer Prefix
+     */
+    private String extractRawToken(String token) {
+
+        if (token == null || token.isBlank()) {
+
+            throw new RuntimeException("JWT token is missing.");
+
+        }
+
+        if (token.startsWith(SecurityConstants.TOKEN_PREFIX)) {
+
+            return token.substring(
+                    SecurityConstants.TOKEN_PREFIX.length()
+            );
+
+        }
+
+        return token;
+
     }
 
+    /**
+     * Parse JWT Claims
+     */
+    private Claims getClaims(String token) {
+
+        try {
+
+            return Jwts.parser()
+
+                    .verifyWith(secretKey)
+
+                    .build()
+
+                    .parseSignedClaims(
+                            extractRawToken(token)
+                    )
+
+                    .getPayload();
+
+        } catch (JwtException exception) {
+
+            throw new RuntimeException(
+                    "Invalid or expired JWT token."
+            );
+
+        }
+
+    }
+
+    /**
+     * Extract User ID
+     */
     public UUID extractUserId(String token) {
-        if (token == null || !token.startsWith("Bearer ") || token.length() <= 7) {
-            throw new RuntimeException("Invalid Authorization header");
-        }
-        token = token.substring(7); // 🛡️ safe now
 
-        try {
-            Claims claims = parser.parseSignedClaims(token).getPayload();
-            String subject = claims.getSubject();
-            System.out.println("DEBUG JWT: Subject extracted: " + subject);
-            return UUID.fromString(subject);
-        } catch (Exception e) {
-            System.err.println("DEBUG JWT: Error parsing token: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException("Failed to extract userId from token: " + e.getMessage());
-        }
+        String userId = getClaims(token)
+
+                .get(
+                        "userId",
+                        String.class
+                );
+
+        return UUID.fromString(userId);
+
     }
 
-    // Extract role from token
-    public String extractRole(String token) {
-        if (token == null || !token.startsWith("Bearer ") || token.length() <= 7) {
-            throw new RuntimeException("Invalid Authorization header");
-        }
-        token = token.substring(7);
+    /**
+     * Extract User Email
+     */
+    public String extractUsername(String token) {
+
+        return getClaims(token)
+
+                .getSubject();
+
+    }
+
+    /**
+     * Extract User Role
+     */
+    public UserRole extractRole(String token) {
+
+        String role = getClaims(token)
+
+                .get(
+                        "role",
+                        String.class
+                );
+
+        return UserRole.valueOf(role);
+
+    }
+
+    /**
+     * Validate JWT Token
+     */
+    public boolean isTokenValid(String token) {
 
         try {
-            Claims claims = parser.parseSignedClaims(token).getPayload();
-            String role = claims.get("role", String.class);
-            System.out.println("DEBUG JWT: Role extracted: " + role);
-            return role != null ? role : "USER";
-        } catch (Exception e) {
-            System.err.println("DEBUG JWT: Error extracting role: " + e.getMessage());
-            e.printStackTrace();
-            return "USER";
+
+            getClaims(token);
+
+            return true;
+
+        } catch (Exception exception) {
+
+            return false;
+
         }
+
+    }
+
+    /**
+     * Check Token Expiration
+     */
+    public boolean isTokenExpired(String token) {
+
+        Date expiration = getClaims(token)
+
+                .getExpiration();
+
+        return expiration.before(
+                new Date()
+        );
+
     }
 
 }

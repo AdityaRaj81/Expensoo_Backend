@@ -1,41 +1,74 @@
 package com.expenso.expense_tracker.model;
 
+import com.expenso.expense_tracker.enums.UserRole;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import java.util.UUID;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+import lombok.*;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * User Entity
+ *
+ * Represents an authenticated user of the Expensoo application.
+ */
 
 @Entity
-@Table(name = "users")
-@Data
+@Table(
+        name = "users",
+        indexes = {
+                @Index(
+                        name = "idx_user_email",
+                        columnList = "email"
+                )
+        }
+)
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class User {
 
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @NotBlank
+    @Size(min = 2, max = 100)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(unique = true, nullable = false)
+    @Email
+    @NotBlank
+    @Column(nullable = false,unique = true,length = 150)
     private String email;
 
-    @Column(nullable = false)
+    @NotBlank
+    @Column(nullable = false, length = 255)
     private String password;
 
-    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false,length = 20)
     @Builder.Default
-    private String role = "USER"; // USER, ADMIN, MANAGER
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean active = true; // soft delete flag
+    private UserRole role = UserRole.USER;
 
     @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(nullable = false)
+    private boolean active = true;
+
+    @CreationTimestamp
+    @Column(nullable = false,updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
+
 }

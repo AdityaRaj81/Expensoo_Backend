@@ -1,15 +1,33 @@
 package com.expenso.expense_tracker.model;
 
-import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
+import com.expenso.expense_tracker.enums.TransactionType;
 
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
+import jakarta.validation.constraints.Size;
+import lombok.*;
+
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "transactions")
+@Table(name = "transactions", indexes = {
+
+                @Index(name = "idx_transactions_user_date", columnList = "userId,date"),
+
+                @Index(name = "idx_transactions_user_type_date", columnList = "userId,type,date"),
+
+                @Index(name = "idx_transactions_user_category", columnList = "userId,category")
+
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,20 +35,39 @@ import java.util.UUID;
 @Builder
 public class Transaction {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
 
-    private UUID userId;
+        @Column(nullable = false)
+        private UUID userId;
 
-    private String type; // INCOME or EXPENSE
-    private Double amount;
+        @Enumerated(EnumType.STRING)
+        @Column(nullable = false, length = 20)
+        private TransactionType type;
 
-    private String category;
-    private LocalDate date;
-    private String notes;
+        @NotNull
+        @Positive
+        @Column(nullable = false, precision = 12, scale = 2)
+        private BigDecimal amount;
 
-    @CreationTimestamp
-    @Builder.Default
-    private LocalDateTime createdAt = LocalDateTime.now();
+        @NotBlank
+        @Column(nullable = false, length = 100)
+        private String category;
+
+        @NotNull
+        @Column(nullable = false)
+        private LocalDate date;
+
+        @Size(max = 500)
+        @Column(length = 500)
+        private String notes;
+
+        @CreationTimestamp
+        @Column(nullable = false, updatable = false)
+        private LocalDateTime createdAt;
+
+        @UpdateTimestamp
+        private LocalDateTime updatedAt;
+
 }

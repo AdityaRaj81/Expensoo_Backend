@@ -1,226 +1,343 @@
 package com.expenso.expense_tracker.service;
 
-import com.expenso.expense_tracker.dto.TransactionDTO;
-import com.expenso.expense_tracker.dto.TransactionRequest;
-import com.expenso.expense_tracker.model.Transaction;
-import com.expenso.expense_tracker.repository.TransactionRepository;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.util.*;
-import java.util.stream.Collectors;
+import com.expenso.expense_tracker.dto.transaction.TransactionDTO;
+import com.expenso.expense_tracker.dto.transaction.TransactionRequest;
+import com.expenso.expense_tracker.dto.transaction.TransactionResponse;
+import com.expenso.expense_tracker.enums.TransactionType;
+import com.expenso.expense_tracker.exception.BadRequestException;
+import com.expenso.expense_tracker.exception.ResourceNotFoundException;
+import com.expenso.expense_tracker.mapper.TransactionMapper;
+import com.expenso.expense_tracker.model.Transaction;
+import com.expenso.expense_tracker.repository.TransactionRepository;
+import com.expenso.expense_tracker.specification.TransactionSpecification;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class TransactionService {
 
         private final TransactionRepository transactionRepository;
 
-        public List<TransactionDTO> getAllTransactions(UUID userId) {
-                System.out.println("DEBUG TransactionService: Fetching all transactions for userId: " + userId);
-                List<Transaction> transactions = transactionRepository.findByUserId(userId);
-                System.out.println("DEBUG TransactionService: Found " + transactions.size() + " transactions");
+        private final TransactionMapper transactionMapper;
 
-                return transactions.stream().map(t -> new TransactionDTO(
-                                String.valueOf(t.getId()),
-                                t.getAmount(),
-                                t.getCategory(),
-                                t.getType(),
-                                t.getDate())).collect(Collectors.toList());
-        }
-
-        public Map<String, Object> getPaginatedTransactions(UUID userId, int page, int limit, String sortBy,
-                        String sortOrder) {
-                System.out.println("DEBUG TransactionService: Fetching paginated transactions for userId: " + userId +
-                                ", page: " + page + ", limit: " + limit + ", sortBy: " + sortBy + ", sortOrder: "
-                                + sortOrder);
-
-                sortBy = (sortBy == null || sortBy.trim().isEmpty()) ? "date" : sortBy;
-                sortOrder = (sortOrder == null || sortOrder.trim().isEmpty()) ? "desc" : sortOrder;
-
-                Sort sort = Sort.by(Sort.Direction.fromString(sortOrder.toUpperCase()), sortBy);
-                PageRequest pageable = PageRequest.of(page - 1, limit, sort);
-
-                Page<Transaction> transactionPage = transactionRepository.findByUserId(userId, pageable);
-                System.out.println("DEBUG TransactionService: Found " + transactionPage.getTotalElements()
-                                + " total transactions");
-
-                List<TransactionDTO> transactionDTOs = transactionPage.getContent().stream()
-                                .map(t -> new TransactionDTO(
-                                                String.valueOf(t.getId()),
-                                                t.getAmount(),
-                                                t.getCategory(),
-                                                t.getType(),
-                                                t.getDate()))
-                                .collect(Collectors.toList());
-
-                Map<String, Object> response = new HashMap<>();
-                response.put("transactions", transactionDTOs);
-
-                Map<String, Object> pagination = new HashMap<>();
-                pagination.put("page", transactionPage.getNumber() + 1);
-                pagination.put("limit", transactionPage.getSize());
-                pagination.put("total", transactionPage.getTotalElements());
-                pagination.put("totalPages", transactionPage.getTotalPages());
-
-                response.put("pagination", pagination);
-                return response;
-        }
-
-        public Map<String, Object> getFilteredTransactions(
+        public TransactionResponse createTransaction(
                         UUID userId,
-                        String search,
-                        String type,
-                        String category,
-                        LocalDate dateFrom,
-                        LocalDate dateTo,
-                        int page,
-                        int limit,
-                        String sortBy,
-                        String sortOrder) {
-                sortBy = (sortBy == null || sortBy.trim().isEmpty()) ? "date" : sortBy;
-                sortOrder = (sortOrder == null || sortOrder.trim().isEmpty()) ? "desc" : sortOrder;
-
-                Sort sort = Sort.by(Sort.Direction.fromString(sortOrder.toUpperCase()), sortBy);
-                PageRequest pageable = PageRequest.of(page - 1, limit, sort);
-
-                Specification<Transaction> spec = Specification
-                                .where((root, query, cb) -> cb.equal(root.get("userId"), userId));
-
-                if (type != null && !type.isBlank()) {
-                        spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), type));
-                }
-
-                if (category != null && !category.isBlank()) {
-                        spec = spec.and((root, query, cb) -> cb.equal(root.get("category"), category));
-                }
-
-                // if (search != null && !search.isEmpty()) {
-                // spec = spec.and((root, query, cb) ->
-                // cb.like(cb.lower(root.get("description")), "%" + search.toLowerCase() +
-                // "%"));
-                // }
-
-                // if (type != null && !type.isEmpty()) {
-                // spec = spec.and((root, query, cb) ->
-                // cb.equal(root.get("type"), type));
-                // }
-
-                // if (category != null && !category.isEmpty()) {
-                // spec = spec.and((root, query, cb) ->
-                // cb.equal(root.get("category"), category));
-                // }
-
-                if (dateFrom != null) {
-                        spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("date"), dateFrom));
-                }
-
-                if (dateTo != null) {
-                        spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("date"), dateTo));
-                }
-
-                Page<Transaction> transactionPage = transactionRepository.findAll(spec, pageable);
-
-                List<TransactionDTO> transactionDTOs = transactionPage.getContent().stream()
-                                .map(t -> new TransactionDTO(
-                                                String.valueOf(t.getId()),
-
-                                                t.getAmount(),
-                                                t.getCategory(),
-                                                t.getType(),
-                                                t.getDate()))
-                                .collect(Collectors.toList());
-
-                Map<String, Object> response = new HashMap<>();
-                response.put("transactions", transactionDTOs);
-
-                Map<String, Object> pagination = new HashMap<>();
-                pagination.put("page", transactionPage.getNumber() + 1);
-                pagination.put("limit", transactionPage.getSize());
-                pagination.put("total", transactionPage.getTotalElements());
-                pagination.put("totalPages", transactionPage.getTotalPages());
-
-                response.put("pagination", pagination);
-                return response;
-        }
-
-        public Transaction getTransaction(Long id, UUID userId) {
-                return transactionRepository.findByIdAndUserId(id, userId)
-                                .orElseThrow(() -> new RuntimeException("Transaction not found or unauthorized"));
-        }
-
-        public List<Transaction> getTransactionsForExport(
-                        UUID userId,
-                        String type,
-                        String category,
-                        LocalDate dateFrom,
-                        LocalDate dateTo) {
-                Specification<Transaction> spec = Specification
-                                .where((root, query, cb) -> cb.equal(root.get("userId"), userId));
-
-                if (type != null && !type.isBlank()) {
-                        spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), type));
-                }
-
-                if (category != null && !category.isBlank()) {
-                        spec = spec.and((root, query, cb) -> cb.equal(root.get("category"), category));
-                }
-
-                if (dateFrom != null) {
-                        spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("date"), dateFrom));
-                }
-
-                if (dateTo != null) {
-                        spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("date"), dateTo));
-                }
-
-                return transactionRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "date"));
-        }
-
-        public Transaction addTransaction(TransactionRequest request, UUID userId) {
-                System.out.println("DEBUG TransactionService: Adding transaction for userId: " + userId);
-                System.out.println("DEBUG TransactionService: Request - type: " + request.getType() +
-                                ", amount: " + request.getAmount() +
-                                ", category: " + request.getCategory() +
-                                ", date: " + request.getDate() +
-                                ", notes: " + request.getNotes());
+                        TransactionRequest request) {
+                validateTransactionRequest(request);
 
                 Transaction transaction = Transaction.builder()
                                 .userId(userId)
                                 .type(request.getType())
                                 .amount(request.getAmount())
-                                .category(request.getCategory())
+                                .category(
+                                                normalizeCategory(
+                                                                request.getCategory()))
                                 .date(request.getDate())
-                                .notes(request.getNotes())
+                                .notes(
+                                                normalizeNotes(
+                                                                request.getNotes()))
                                 .build();
 
-                Transaction saved = transactionRepository.save(transaction);
-                System.out.println("DEBUG TransactionService: Transaction saved with ID: " + saved.getId());
-                return saved;
+                Transaction savedTransaction = transactionRepository.save(
+                                transaction);
+
+                return transactionMapper.toTransactionResponse(
+                                savedTransaction);
         }
 
-        public Transaction updateTransaction(Long id, TransactionRequest request, UUID userId) {
-                Transaction existing = transactionRepository.findByIdAndUserId(id, userId)
-                                .orElseThrow(() -> new RuntimeException("Transaction not found or unauthorized"));
+        @Transactional(readOnly = true)
+        public TransactionResponse getTransactionById(
+                        UUID userId,
+                        Long transactionId) {
+                Transaction transaction = getTransactionEntity(
+                                transactionId,
+                                userId);
 
-                existing.setAmount(request.getAmount());
-                existing.setCategory(request.getCategory());
-                existing.setDate(request.getDate());
-
-                existing.setNotes(request.getNotes());
-                existing.setType(request.getType());
-
-                return transactionRepository.save(existing);
+                return transactionMapper.toTransactionResponse(
+                                transaction);
         }
 
-        public void deleteTransaction(Long id, UUID userId) {
-                Transaction transaction = transactionRepository.findByIdAndUserId(id, userId)
-                                .orElseThrow(() -> new RuntimeException("Transaction not found or unauthorized"));
+        @Transactional(readOnly = true)
+        public List<TransactionDTO> getAllTransactions(
+                        UUID userId) {
+                List<Transaction> transactions = transactionRepository
+                                .findByUserIdOrderByDateDesc(
+                                                userId);
 
-                transactionRepository.delete(transaction);
+                return transactionMapper.toTransactionDTOList(
+                                transactions);
+        }
+
+        @Transactional(readOnly = true)
+        public Page<TransactionDTO> getTransactions(
+                        UUID userId,
+                        String search,
+                        TransactionType type,
+                        String category,
+                        LocalDate fromDate,
+                        LocalDate toDate,
+                        Pageable pageable) {
+                if (fromDate != null &&
+                                toDate != null &&
+                                fromDate.isAfter(toDate)) {
+                        throw new BadRequestException(
+                                        "From date cannot be after to date.");
+                }
+
+                Specification<Transaction> specification = Specification.where(
+                                TransactionSpecification
+                                                .belongsToUser(userId));
+
+                if (search != null &&
+                                !search.isBlank()) {
+                        specification = specification.and(
+                                        TransactionSpecification
+                                                        .containsSearch(search));
+                }
+
+                if (type != null) {
+                        specification = specification.and(
+                                        TransactionSpecification
+                                                        .hasType(type));
+                }
+
+                if (category != null &&
+                                !category.isBlank()) {
+                        specification = specification.and(
+                                        TransactionSpecification
+                                                        .hasCategory(category));
+                }
+
+                if (fromDate != null) {
+                        specification = specification.and(
+                                        TransactionSpecification
+                                                        .fromDate(fromDate));
+                }
+
+                if (toDate != null) {
+                        specification = specification.and(
+                                        TransactionSpecification
+                                                        .toDate(toDate));
+                }
+
+                Page<Transaction> transactionPage = transactionRepository.findAll(
+                                specification,
+                                pageable);
+
+                return transactionPage.map(
+                                transactionMapper::toTransactionDTO);
+        }
+
+        public TransactionResponse updateTransaction(
+                        Long transactionId,
+                        TransactionRequest request,
+                        UUID userId) {
+                validateTransactionRequest(request);
+
+                Transaction transaction = getTransactionEntity(
+                                transactionId,
+                                userId);
+
+                transaction.setType(
+                                request.getType());
+
+                transaction.setAmount(
+                                request.getAmount());
+
+                transaction.setCategory(
+                                normalizeCategory(
+                                                request.getCategory()));
+
+                transaction.setDate(
+                                request.getDate());
+
+                transaction.setNotes(
+                                normalizeNotes(
+                                                request.getNotes()));
+
+                Transaction updatedTransaction = transactionRepository.save(
+                                transaction);
+
+                return transactionMapper.toTransactionResponse(
+                                updatedTransaction);
+        }
+
+        public void deleteTransaction(
+                        Long transactionId,
+                        UUID userId) {
+                Transaction transaction = getTransactionEntity(
+                                transactionId,
+                                userId);
+
+                transactionRepository.delete(
+                                transaction);
+        }
+
+        @Transactional(readOnly = true)
+        public List<TransactionDTO> getTransactionsByCategory(
+                        UUID userId,
+                        String category) {
+                if (category == null ||
+                                category.isBlank()) {
+                        throw new BadRequestException(
+                                        "Category is required.");
+                }
+
+                List<Transaction> transactions = transactionRepository
+                                .findByUserIdAndCategoryIgnoreCase(
+                                                userId,
+                                                normalizeCategory(category));
+
+                return transactionMapper.toTransactionDTOList(
+                                transactions);
+        }
+
+        @Transactional(readOnly = true)
+        public List<TransactionDTO> getTransactionsByType(
+                        UUID userId,
+                        TransactionType type) {
+                if (type == null) {
+                        throw new BadRequestException(
+                                        "Transaction type is required.");
+                }
+
+                List<Transaction> transactions = transactionRepository
+                                .findByUserIdAndType(
+                                                userId,
+                                                type);
+
+                return transactionMapper.toTransactionDTOList(
+                                transactions);
+        }
+
+        @Transactional(readOnly = true)
+        public List<TransactionDTO> getTransactionsBetweenDates(
+                        UUID userId,
+                        LocalDate startDate,
+                        LocalDate endDate) {
+                if (startDate == null ||
+                                endDate == null) {
+                        throw new BadRequestException(
+                                        "Start date and end date are required.");
+                }
+
+                if (startDate.isAfter(endDate)) {
+                        throw new BadRequestException(
+                                        "Start date cannot be after end date.");
+                }
+
+                List<Transaction> transactions = transactionRepository
+                                .findByUserIdAndDateBetweenOrderByDateDesc(
+                                                userId,
+                                                startDate,
+                                                endDate);
+
+                return transactionMapper.toTransactionDTOList(
+                                transactions);
+        }
+
+        @Transactional(readOnly = true)
+        public long countTransactions(
+                        UUID userId) {
+                return transactionRepository
+                                .countByUserId(
+                                                userId);
+        }
+
+        @Transactional(readOnly = true)
+        public boolean belongsToUser(
+                        Long transactionId,
+                        UUID userId) {
+                return transactionRepository
+                                .existsByIdAndUserId(
+                                                transactionId,
+                                                userId);
+        }
+
+        private Transaction getTransactionEntity(
+                        Long transactionId,
+                        UUID userId) {
+                return transactionRepository
+                                .findByIdAndUserId(
+                                                transactionId,
+                                                userId)
+                                .orElseThrow(
+                                                () -> new ResourceNotFoundException(
+                                                                "Transaction not found."));
+        }
+
+        private void validateTransactionRequest(
+                        TransactionRequest request) {
+                if (request == null) {
+                        throw new BadRequestException(
+                                        "Transaction request cannot be null.");
+                }
+
+                if (request.getType() == null) {
+                        throw new BadRequestException(
+                                        "Transaction type is required.");
+                }
+
+                if (request.getAmount() == null ||
+                                request.getAmount().signum() <= 0) {
+                        throw new BadRequestException(
+                                        "Amount must be greater than zero.");
+                }
+
+                if (request.getCategory() == null ||
+                                request.getCategory().isBlank()) {
+                        throw new BadRequestException(
+                                        "Category is required.");
+                }
+
+                if (request.getDate() == null) {
+                        throw new BadRequestException(
+                                        "Transaction date is required.");
+                }
+
+                if (request.getCategory().strip().length() > 100) {
+                        throw new BadRequestException(
+                                        "Category cannot exceed 100 characters.");
+                }
+
+                if (request.getNotes() != null &&
+                                request.getNotes().strip().length() > 500) {
+                        throw new BadRequestException(
+                                        "Notes cannot exceed 500 characters.");
+                }
+        }
+
+        private String normalizeCategory(
+                        String category) {
+                return category
+                                .strip()
+                                .replaceAll(
+                                                "\\s+",
+                                                " ");
+        }
+
+        private String normalizeNotes(
+                        String notes) {
+                if (notes == null) {
+                        return null;
+                }
+
+                String normalized = notes.strip();
+
+                return normalized.isEmpty()
+                                ? null
+                                : normalized;
         }
 }

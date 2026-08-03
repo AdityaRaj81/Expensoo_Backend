@@ -1,44 +1,119 @@
 package com.expenso.expense_tracker.controller;
 
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.UUID;
+
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.*;
 
+import com.expenso.expense_tracker.dto.common.ApiResponse;
+import com.expenso.expense_tracker.dto.user.UserResponse;
 import com.expenso.expense_tracker.service.UserService;
-import com.expenso.expense_tracker.model.User;
-import com.expenso.expense_tracker.dto.LoginDTO;
 
+import lombok.RequiredArgsConstructor;
 
+/**
+ * ============================================================
+ * User Controller
+ * ============================================================
+ *
+ * Handles
+ *
+ * • Get User Profile
+ * • Get Current User
+ *
+ * Base URL:
+ *
+ * /api/users
+ *
+ * ============================================================
+ */
 @RestController
-
 @RequestMapping("/api/users")
+@RequiredArgsConstructor
 public class UserController {
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
 
-    @PostMapping("/signup")
-    public ResponseEntity<User> signup(@RequestBody User user) {
-        return ResponseEntity.ok(userService.createUser(user));
+    /**
+     * ============================================================
+     * Get User By ID
+     * ============================================================
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserById(
+
+            @PathVariable
+            UUID id
+
+    ) {
+
+        UserResponse response =
+
+                userService.getUserById(id);
+
+        ApiResponse<UserResponse> apiResponse =
+
+                ApiResponse.<UserResponse>builder()
+
+                        .success(true)
+
+                        .message("User fetched successfully.")
+
+                        .data(response)
+
+                        .build();
+
+        return ResponseEntity.ok(
+
+                apiResponse
+
+        );
+
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginDTO loginDTO) {
-        String result = userService.loginUser(loginDTO);
+    /**
+     * ============================================================
+     * Get Current Logged-in User
+     * ============================================================
+     *
+     * This endpoint is useful after login.
+     *
+     * It will later use:
+     *
+     * @AuthenticationPrincipal UserPrincipal
+     *
+     * ============================================================
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
 
-        switch (result) {
-            case "user_not_found":
-                return ResponseEntity.status(404).body("User not found with this email.");
-            case "password_wrong":
-                return ResponseEntity.status(401).body("Incorrect password.");
-            default:
-                return ResponseEntity.ok(result); // Could be user's name or welcome message
-        }
+            @RequestHeader("Authorization")
+            String token
+
+    ) {
+
+        UserResponse response =
+
+                userService.getCurrentUser(token);
+
+        ApiResponse<UserResponse> apiResponse =
+
+                ApiResponse.<UserResponse>builder()
+
+                        .success(true)
+
+                        .message("Current user fetched successfully.")
+
+                        .data(response)
+
+                        .build();
+
+        return ResponseEntity.ok(
+
+                apiResponse
+
+        );
+
     }
-
-
 
 }

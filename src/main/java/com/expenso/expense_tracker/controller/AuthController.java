@@ -1,89 +1,113 @@
 package com.expenso.expense_tracker.controller;
 
-import com.expenso.expense_tracker.dto.LoginRequest;
-import com.expenso.expense_tracker.model.User;
-import com.expenso.expense_tracker.repository.UserRepository;
-import com.expenso.expense_tracker.security.JwtService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.expenso.expense_tracker.dto.auth.LoginRequest;
+import com.expenso.expense_tracker.dto.auth.LoginResponse;
+import com.expenso.expense_tracker.dto.auth.SignupRequest;
+import com.expenso.expense_tracker.dto.common.ApiResponse;
+import com.expenso.expense_tracker.service.AuthService;
+
+import jakarta.validation.Valid;
+
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-
+/**
+ * ============================================================
+ * Authentication Controller
+ * ============================================================
+ *
+ * Handles
+ *
+ * • User Registration
+ * • User Login
+ *
+ * Base URL:
+ *
+ * /api/auth
+ *
+ * ============================================================
+ */
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 @CrossOrigin
 public class AuthController {
 
-    @Autowired
-    private UserRepository userRepository;
+    private final AuthService authService;
 
-    @Autowired
-    private JwtService jwtService; // ✅ moved above usage
-
+    /**
+     * ============================================================
+     * Register User
+     * ============================================================
+     */
     @PostMapping("/signup")
-    public ResponseEntity<?> signup(@RequestBody User user) {
+    public ResponseEntity<ApiResponse<LoginResponse>> signup(
 
-        // Always save emails in lowercase
-        String normalizedEmail = user.getEmail().toLowerCase();
+            @Valid
+            @RequestBody
+            SignupRequest request
 
-        if (userRepository.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", "Email already registered!"));
-        }
-        user.setEmail(normalizedEmail);
-        User savedUser = userRepository.save(user);
+    ) {
 
-        String token = jwtService.generateToken(savedUser.getId(), savedUser.getRole());
+        LoginResponse response = authService.signup(request);
 
-        Map<String, Object> response = new HashMap<>();
-        response.put("token", token);
+        ApiResponse<LoginResponse> apiResponse =
 
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", savedUser.getId());
-        userMap.put("email", savedUser.getEmail());
-        userMap.put("name", savedUser.getName() != null ? savedUser.getName() : "");
-        userMap.put("role", savedUser.getRole());
-        response.put("user", userMap);
+                ApiResponse.<LoginResponse>builder()
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                        .success(true)
+
+                        .message("Account created successfully.")
+
+                        .data(response)
+
+                        .build();
+
+        return ResponseEntity
+
+                .status(HttpStatus.CREATED)
+
+                .body(apiResponse);
+
     }
 
+    /**
+     * ============================================================
+     * Login User
+     * ============================================================
+     */
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
-        Optional<User> userOpt = userRepository.findByEmailIgnoreCase(loginRequest.getEmail());
+    public ResponseEntity<ApiResponse<LoginResponse>> login(
 
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid email"));
-        }
+            @Valid
+            @RequestBody
+            LoginRequest request
 
-        User user = userOpt.get();
+    ) {
 
-        // Check if user is active
-        if (!user.getActive()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "User account is blocked"));
-        }
+        LoginResponse response = authService.login(request);
 
-        if (!user.getPassword().equals(loginRequest.getPassword())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "Invalid password"));
-        }
+        ApiResponse<LoginResponse> apiResponse =
 
-        // ✅ Generate JWT token with role claim
-        String token = jwtService.generateToken(user.getId(), user.getRole());
+                ApiResponse.<LoginResponse>builder()
 
-        // ✅ Return token and user with role
-        Map<String, Object> response = new HashMap<>();
-        response.put("token", token);
+                        .success(true)
 
-        Map<String, Object> userMap = new HashMap<>();
-        userMap.put("id", user.getId());
-        userMap.put("email", user.getEmail());
-        userMap.put("name", user.getName() != null ? user.getName() : "");
-        userMap.put("role", user.getRole());
-        response.put("user", userMap);
+                        .message("Login successful.")
 
-        return ResponseEntity.ok(response);
+                        .data(response)
+
+                        .build();
+
+        return ResponseEntity.ok(
+
+                apiResponse
+
+        );
+
     }
+
 }

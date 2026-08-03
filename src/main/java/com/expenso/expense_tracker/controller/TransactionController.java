@@ -1,204 +1,312 @@
 package com.expenso.expense_tracker.controller;
 
-import com.expenso.expense_tracker.model.Transaction;
-import com.expenso.expense_tracker.dto.TransactionRequest;
-import com.expenso.expense_tracker.security.JwtService;
-import com.expenso.expense_tracker.service.TransactionService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
+import java.time.LocalDate;
+import java.util.Set;
+import java.util.UUID;
+
+import jakarta.validation.Valid;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.UUID;
+import com.expenso.expense_tracker.dto.common.ApiResponse;
+import com.expenso.expense_tracker.dto.transaction.TransactionDTO;
+import com.expenso.expense_tracker.dto.transaction.TransactionRequest;
+import com.expenso.expense_tracker.dto.transaction.TransactionResponse;
+import com.expenso.expense_tracker.enums.TransactionType;
+import com.expenso.expense_tracker.exception.BadRequestException;
+import com.expenso.expense_tracker.security.JwtService;
+import com.expenso.expense_tracker.service.TransactionService;
+
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/transactions")
 @RequiredArgsConstructor
 public class TransactionController {
 
-    private final TransactionService transactionService;
+        private static final int MAX_PAGE_SIZE = 100;
 
-    @Autowired
-    private JwtService jwtService;
+        private static final Set<String> ALLOWED_DATE_SORTS = Set.of("asc", "desc");
 
-    private UUID getUserIdFromAuthHeader(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-            throw new RuntimeException("Missing or invalid Authorization header");
+        private static final Set<String> ALLOWED_AMOUNT_SORTS = Set.of("asc", "desc");
+
+        private final TransactionService transactionService;
+
+        private final JwtService jwtService;
+
+        private UUID extractUserId(
+                        String authorizationHeader) {
+                return jwtService.extractUserId(
+                                authorizationHeader);
         }
-        return jwtService.extractUserId(authHeader);
-    }
 
-    @GetMapping
-    public ResponseEntity<?> getTransactions(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
-            @RequestParam(defaultValue = "date") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
-            }
+        @PostMapping
+        public ResponseEntity<ApiResponse<TransactionResponse>> createTransaction(
 
-            UUID userId = jwtService.extractUserId(authHeader);
-            System.out.println("DEBUG: Fetching transactions for userId: " + userId);
-            return ResponseEntity
-                    .ok(transactionService.getPaginatedTransactions(userId, page, limit, sortBy, sortOrder));
-        } catch (Exception e) {
-            System.err.println("DEBUG: Error fetching transactions: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("Invalid or expired token. Please login again. Error: " + e.getMessage());
+                        @RequestHeader("Authorization") String authorizationHeader,
+
+                        @Valid @RequestBody TransactionRequest request
+
+        ) {
+
+                UUID userId = extractUserId(
+                                authorizationHeader);
+
+                TransactionResponse response = transactionService.createTransaction(
+                                userId,
+                                request);
+
+                ApiResponse<TransactionResponse> apiResponse = ApiResponse
+                                .<TransactionResponse>builder()
+                                .success(true)
+                                .message(
+                                                "Transaction created successfully.")
+                                .data(response)
+                                .build();
+
+                return ResponseEntity
+                                .status(HttpStatus.CREATED)
+                                .body(apiResponse);
         }
-    }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getTransaction(
-            @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
-        try {
-            UUID userId = getUserIdFromAuthHeader(authHeader);
-            return ResponseEntity.ok(transactionService.getTransaction(id, userId));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Transaction not found");
+        @GetMapping("/{id}")
+        public ResponseEntity<ApiResponse<TransactionResponse>> getTransactionById(
+
+                        @RequestHeader("Authorization") String authorizationHeader,
+
+                        @PathVariable Long id
+
+        ) {
+
+                UUID userId = extractUserId(
+                                authorizationHeader);
+
+                TransactionResponse response = transactionService.getTransactionById(
+                                userId,
+                                id);
+
+                ApiResponse<TransactionResponse> apiResponse = ApiResponse
+                                .<TransactionResponse>builder()
+                                .success(true)
+                                .message(
+                                                "Transaction fetched successfully.")
+                                .data(response)
+                                .build();
+
+                return ResponseEntity.ok(
+                                apiResponse);
         }
-    }
 
-    @GetMapping("/filter")
-    public ResponseEntity<?> getFilteredTransactions(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestParam(required = false) String search,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
-            @RequestParam(defaultValue = "date") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortOrder) {
-        try {
-            if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
-            }
+        @GetMapping
+        public ResponseEntity<ApiResponse<Page<TransactionDTO>>> getTransactions(
 
-            UUID userId = jwtService.extractUserId(authHeader);
-            System.out.println("DEBUG: Fetching filtered transactions for userId: " + userId);
-            return ResponseEntity.ok(transactionService.getFilteredTransactions(
-                    userId, search, type, category, dateFrom, dateTo, page, limit, sortBy, sortOrder));
-        } catch (Exception e) {
-            System.err.println("DEBUG: Error fetching filtered transactions: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to fetch filtered transactions. Error: " + e.getMessage());
+                        @RequestHeader("Authorization") String authorizationHeader,
+
+                        @RequestParam(required = false) String search,
+
+                        @RequestParam(required = false) TransactionType type,
+
+                        @RequestParam(required = false) String category,
+
+                        @RequestParam(required = false) LocalDate fromDate,
+
+                        @RequestParam(required = false) LocalDate toDate,
+
+                        @RequestParam(defaultValue = "desc") String dateSort,
+
+                        @RequestParam(required = false) String amountSort,
+
+                        @RequestParam(defaultValue = "0") int page,
+
+                        @RequestParam(defaultValue = "20") int size
+
+        ) {
+
+                UUID userId = extractUserId(
+                                authorizationHeader);
+
+                validatePagination(
+                                page,
+                                size);
+
+                String normalizedDateSort = normalizeDateSort(
+                                dateSort);
+
+                String normalizedAmountSort = normalizeAmountSort(
+                                amountSort);
+
+                Sort.Direction dateDirection = "asc".equals(normalizedDateSort)
+                                ? Sort.Direction.ASC
+                                : Sort.Direction.DESC;
+
+                Sort sort = Sort.by(
+                                new Sort.Order(
+                                                dateDirection,
+                                                "date"));
+
+                if (normalizedAmountSort != null) {
+
+                        Sort.Direction amountDirection = "asc".equals(normalizedAmountSort)
+                                        ? Sort.Direction.ASC
+                                        : Sort.Direction.DESC;
+
+                        sort = sort.and(
+                                        Sort.by(
+                                                        new Sort.Order(
+                                                                        amountDirection,
+                                                                        "amount")));
+                }
+
+                sort = sort.and(
+                                Sort.by(
+                                                Sort.Order.desc("id")));
+
+                Pageable pageable = PageRequest.of(
+                                page,
+                                size,
+                                sort);
+
+                Page<TransactionDTO> response = transactionService.getTransactions(
+                                userId,
+                                search,
+                                type,
+                                category,
+                                fromDate,
+                                toDate,
+                                pageable);
+
+                ApiResponse<Page<TransactionDTO>> apiResponse = ApiResponse
+                                .<Page<TransactionDTO>>builder()
+                                .success(true)
+                                .message(
+                                                "Transactions fetched successfully.")
+                                .data(response)
+                                .build();
+
+                return ResponseEntity.ok(
+                                apiResponse);
         }
-    }
 
-    @GetMapping("/export")
-    public ResponseEntity<String> exportTransactions(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo) {
-        try {
-            UUID userId = getUserIdFromAuthHeader(authHeader);
-            List<Transaction> transactions = transactionService.getTransactionsForExport(
-                    userId, type, category, dateFrom, dateTo);
+        @PutMapping("/{id}")
+        public ResponseEntity<ApiResponse<TransactionResponse>> updateTransaction(
 
-            StringBuilder csv = new StringBuilder();
-            csv.append("Date,Type,Category,Amount,Notes\n");
+                        @RequestHeader("Authorization") String authorizationHeader,
 
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            for (Transaction transaction : transactions) {
-                csv.append(transaction.getDate().format(formatter)).append(",")
-                        .append(escapeCsv(transaction.getType())).append(",")
-                        .append(escapeCsv(transaction.getCategory())).append(",")
-                        .append(transaction.getAmount()).append(",")
-                        .append(escapeCsv(transaction.getNotes()))
-                        .append("\n");
-            }
+                        @PathVariable Long id,
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.parseMediaType("text/csv"));
-            headers.setContentDispositionFormData("attachment", "transactions_"
-                    + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + ".csv");
+                        @Valid @RequestBody TransactionRequest request
 
-            return new ResponseEntity<>(csv.toString(), headers, HttpStatus.OK);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Failed to export transactions");
+        ) {
+
+                UUID userId = extractUserId(
+                                authorizationHeader);
+
+                TransactionResponse response = transactionService.updateTransaction(
+                                id,
+                                request,
+                                userId);
+
+                ApiResponse<TransactionResponse> apiResponse = ApiResponse
+                                .<TransactionResponse>builder()
+                                .success(true)
+                                .message(
+                                                "Transaction updated successfully.")
+                                .data(response)
+                                .build();
+
+                return ResponseEntity.ok(
+                                apiResponse);
         }
-    }
 
-    private String escapeCsv(String value) {
-        if (value == null) {
-            return "";
+        @DeleteMapping("/{id}")
+        public ResponseEntity<ApiResponse<Void>> deleteTransaction(
+
+                        @RequestHeader("Authorization") String authorizationHeader,
+
+                        @PathVariable Long id
+
+        ) {
+
+                UUID userId = extractUserId(
+                                authorizationHeader);
+
+                transactionService.deleteTransaction(
+                                id,
+                                userId);
+
+                ApiResponse<Void> apiResponse = ApiResponse
+                                .<Void>builder()
+                                .success(true)
+                                .message(
+                                                "Transaction deleted successfully.")
+                                .data(null)
+                                .build();
+
+                return ResponseEntity.ok(
+                                apiResponse);
         }
-        return "\"" + value.replace("\"", "\"\"") + "\"";
-    }
 
-    @PostMapping("/add")
-    public ResponseEntity<?> addTransaction(
-            @RequestBody TransactionRequest request,
-            @RequestHeader("Authorization") String authHeader) {
-        try {
-            if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
-            }
+        private void validatePagination(
+                        int page,
+                        int size) {
 
-            UUID userId = jwtService.extractUserId(authHeader);
-            System.out.println("DEBUG: Adding transaction for userId: " + userId);
-            System.out.println("DEBUG: Transaction request: " + request);
-            Transaction transaction = transactionService.addTransaction(request, userId);
-            return ResponseEntity.ok(transaction);
-        } catch (Exception e) {
-            System.err.println("DEBUG: Error adding transaction: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("Failed to add transaction. Error: " + e.getMessage());
+                if (page < 0) {
+                        throw new BadRequestException(
+                                        "Page cannot be negative.");
+                }
+
+                if (size < 1 ||
+                                size > MAX_PAGE_SIZE) {
+                        throw new BadRequestException(
+                                        "Page size must be between 1 and 100.");
+                }
         }
-    }
 
-    // UPDATE Transaction
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateTransaction(
-            @PathVariable Long id,
-            @RequestBody TransactionRequest request,
-            @RequestHeader("Authorization") String authHeader) {
-        try {
-            if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
-            }
+        private String normalizeDateSort(
+                        String dateSort) {
 
-            UUID userId = jwtService.extractUserId(authHeader);
-            Transaction updatedTransaction = transactionService.updateTransaction(id, request, userId);
-            return ResponseEntity.ok(updatedTransaction);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to update transaction");
+                if (dateSort == null ||
+                                dateSort.isBlank()) {
+                        return "desc";
+                }
+
+                String normalized = dateSort
+                                .strip()
+                                .toLowerCase();
+
+                if (!ALLOWED_DATE_SORTS.contains(
+                                normalized)) {
+                        throw new BadRequestException(
+                                        "Date sort must be asc or desc.");
+                }
+
+                return normalized;
         }
-    }
 
-    // DELETE Transaction
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteTransaction(
-            @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
-        try {
-            if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() <= 7) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing or invalid Authorization header");
-            }
+        private String normalizeAmountSort(
+                        String amountSort) {
 
-            UUID userId = jwtService.extractUserId(authHeader);
-            transactionService.deleteTransaction(id, userId);
-            return ResponseEntity.ok("Transaction deleted successfully");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete transaction");
+                if (amountSort == null ||
+                                amountSort.isBlank()) {
+                        return null;
+                }
+
+                String normalized = amountSort
+                                .strip()
+                                .toLowerCase();
+
+                if (!ALLOWED_AMOUNT_SORTS.contains(
+                                normalized)) {
+                        throw new BadRequestException(
+                                        "Amount sort must be asc or desc.");
+                }
+
+                return normalized;
         }
-    }
 }
