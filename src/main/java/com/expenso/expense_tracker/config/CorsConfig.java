@@ -1,50 +1,51 @@
 package com.expenso.expense_tracker.config;
 
+import java.util.Arrays;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class CorsConfig {
 
-    @Value("${app.cors.allowed-origins=https://expensoo-raj.vercel.app}")
+    @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
 
     @Bean
-    public WebMvcConfigurer corsConfigurer() {
+    public CorsConfigurationSource corsConfigurationSource() {
 
-        return new WebMvcConfigurer() {
+        CorsConfiguration configuration = new CorsConfiguration();
 
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
+        configuration.setAllowedOrigins(
+                Arrays.asList(allowedOrigins.split("\\s*,\\s*")));
 
-                registry.addMapping("/**")
+        configuration.setAllowedMethods(
+                Arrays.asList(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"));
 
-                        .allowedOrigins(parseOrigins())
+        configuration.setAllowedHeaders(Arrays.asList("*"));
 
-                        .allowedMethods(
-                                "GET",
-                                "POST",
-                                "PUT",
-                                "PATCH",
-                                "DELETE",
-                                "OPTIONS")
+        configuration.setExposedHeaders(
+                Arrays.asList(
+                        "Authorization",
+                        "Content-Disposition"));
 
-                        .allowedHeaders("*")
+        configuration.setAllowCredentials(false);
 
-                        .exposedHeaders(
-                                "Authorization",
-                                "Content-Disposition")
+        configuration.setMaxAge(3600L);
 
-                        .allowCredentials(true)
-                        .maxAge(3600);
-            }
-        };
-    }
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
-    private String[] parseOrigins() {
-        return allowedOrigins.split("\\s*,\\s*");
+        source.registerCorsConfiguration("/**", configuration);
+
+        return source;
     }
 }
