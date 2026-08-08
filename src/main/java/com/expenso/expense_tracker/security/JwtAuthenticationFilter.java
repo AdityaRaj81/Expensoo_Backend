@@ -30,78 +30,65 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtService jwtService;
+        private final JwtService jwtService;
 
-    private final CustomUserDetailsService customUserDetailsService;
+        private final CustomUserDetailsService customUserDetailsService;
 
-    /**
-     * Filter Request
-     */
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
+        /**
+         * Filter Request
+         */
+        @Override
+        protected void doFilterInternal(
+                        HttpServletRequest request,
+                        HttpServletResponse response,
+                        FilterChain filterChain) throws ServletException, IOException {
 
-        String authorizationHeader = request.getHeader(
-                SecurityConstants.AUTHORIZATION_HEADER
-        );
+                String authorizationHeader = request.getHeader(
+                                SecurityConstants.AUTHORIZATION_HEADER);
 
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith(SecurityConstants.TOKEN_PREFIX)) {
+                if (authorizationHeader == null
+                                || !authorizationHeader.startsWith(SecurityConstants.TOKEN_PREFIX)) {
 
-            filterChain.doFilter(request, response);
+                        filterChain.doFilter(request, response);
 
-            return;
+                        return;
 
-        }
+                }
 
-        try {
+                try {
 
-            String token = authorizationHeader.substring(
-                    SecurityConstants.TOKEN_PREFIX.length()
-            );
+                        String token = authorizationHeader.substring(
+                                        SecurityConstants.TOKEN_PREFIX.length());
 
-            String userId = jwtService.extractUserId(token).toString();
+                        if (SecurityContextHolder.getContext().getAuthentication() == null
+                                        && jwtService.isTokenValid(token)) {
 
-            if (SecurityContextHolder.getContext().getAuthentication() == null
-                    && jwtService.isTokenValid(token)) {
+                                UserDetails userDetails = customUserDetailsService.loadUserByUsername(
+                                                jwtService.extractUsername(token));
 
-                UserDetails userDetails = customUserDetailsService
-                        .loadUserByUsername(
-                                ((UserPrincipal) customUserDetailsService
-                                        .loadUserByUsername(
-                                                jwtService.extractUsername(token)
-                                        )).getUsername()
-                        );
+                                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                                userDetails,
+                                                null,
+                                                userDetails.getAuthorities());
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
-                        );
+                                authentication.setDetails(
+                                                new WebAuthenticationDetailsSource()
+                                                                .buildDetails(request));
 
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource()
-                                .buildDetails(request)
-                );
+                                SecurityContextHolder
+                                                .getContext()
+                                                .setAuthentication(authentication);
 
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
+                        }
 
-            }
+                } catch (Exception exception) {
 
-        } catch (Exception exception) {
+                        SecurityContextHolder.clearContext();
 
-            SecurityContextHolder.clearContext();
+                }
+
+                filterChain.doFilter(request, response);
 
         }
-
-        filterChain.doFilter(request, response);
-
-    }
 
 }

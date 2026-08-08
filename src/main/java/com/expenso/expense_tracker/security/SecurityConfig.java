@@ -43,6 +43,22 @@ public class SecurityConfig {
 
                                 .csrf(csrf -> csrf.disable())
 
+                                .headers(headers -> headers
+
+                                                .frameOptions(frame -> frame.deny())
+
+                                                .contentTypeOptions(Customizer.withDefaults())
+
+                                                .referrerPolicy(referrer ->
+
+                                                referrer.policy(
+                                                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+
+                                                .permissionsPolicy(policy ->
+
+                                                policy.policy(
+                                                                "camera=(), microphone=(), geolocation=()")))
+
                                 .formLogin(form -> form.disable())
 
                                 .httpBasic(Customizer.withDefaults())
